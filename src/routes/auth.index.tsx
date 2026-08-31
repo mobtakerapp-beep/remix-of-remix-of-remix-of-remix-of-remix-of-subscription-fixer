@@ -328,7 +328,7 @@ function AuthPage() {
                   ? "أدخل السريال الذي اشتريته وكلمة المرور الجديدة."
                   : "Enter the serial you purchased and your new password."}
               </p>
-              <form onSubmit={resetWithCode} className="space-y-3">
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="serial">{ar ? "السريال" : "Serial"}</Label>
                   <Input
@@ -337,7 +337,6 @@ function AuthPage() {
                     onChange={(e) => setResetCode(e.target.value)}
                     placeholder={ar ? "السريال المشتري" : "Purchased serial"}
                     className="rounded-xl"
-                    required
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -349,13 +348,13 @@ function AuthPage() {
                     onChange={(e) => setResetPassword(e.target.value)}
                     placeholder={ar ? "كلمة مرور جديدة (٦ أحرف على الأقل)" : "New password (min 6 characters)"}
                     className="rounded-xl"
-                    required
                     minLength={6}
                   />
                 </div>
                 <Button
-                  type="submit"
+                  type="button"
                   size="lg"
+                  onClick={resetWithCode}
                   className="w-full rounded-full gradient-hero text-primary-foreground"
                   disabled={resetting}
                 >
@@ -363,7 +362,8 @@ function AuthPage() {
                     ? (ar ? "جارٍ التغيير…" : "Changing…")
                     : (ar ? "تغيير كلمة المرور" : "Change password")}
                 </Button>
-              </form>
+              </div>
+
             </div>
           )}
 
