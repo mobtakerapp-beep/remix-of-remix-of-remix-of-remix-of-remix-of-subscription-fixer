@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-import { confirmExistingEmail, signUpDirect } from "@/lib/auth.functions";
+import { confirmExistingEmail, resetPasswordWithCode, signUpDirect } from "@/lib/auth.functions";
 import { useI18n } from "@/lib/i18n";
 import { saveProfile } from "@/lib/subscription.functions";
 
@@ -36,14 +36,18 @@ function AuthPage() {
   const createAccount = useServerFn(signUpDirect);
   const confirmEmail = useServerFn(confirmExistingEmail);
   const saveProfileFn = useServerFn(saveProfile);
+  const resetPasswordFn = useServerFn(resetPasswordWithCode);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [remember, setRemember] = useState(true);
-  const [sendingReset, setSendingReset] = useState(false);
   const [password, setPassword] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [school, setSchool] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
   const ar = lang === "ar";
 
   useEffect(() => {
@@ -68,34 +72,49 @@ function AuthPage() {
     else localStorage.removeItem("remembered_email");
   };
 
-  const sendReset = async () => {
-    const target = email.trim();
-    if (!target) {
-      toast.error(ar ? "اكتب بريدك الإلكتروني أولاً." : "Enter your email first.");
+  const resetWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = email.trim();
+    if (!targetEmail || !resetCode.trim() || !resetPassword.trim()) {
+      toast.error(ar ? "أكمل جميع الحقول." : "Fill in all fields.");
       return;
     }
-    setSendingReset(true);
+    setResetting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(target, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const result = await resetPasswordFn({
+        data: {
+          email: targetEmail,
+          code: resetCode.trim(),
+          password: resetPassword,
+        },
       });
-      if (error) throw error;
+      if (!result.ok) {
+        if (result.code === "no_account") {
+          throw new Error(ar ? "لا يوجد حساب بهذا البريد." : "No account found with this email.");
+        }
+        if (result.code === "bad_code") {
+          throw new Error(
+            ar
+              ? "السريال غير صحيح أو غير مرتبط بهذا الحساب."
+              : "Invalid serial or not linked to this account.",
+          );
+        }
+        throw new Error(ar ? "تعذّر إعادة تعيين كلمة المرور." : "Could not reset password.");
+      }
       toast.success(
         ar
-          ? "أرسلنا رابط تغيير كلمة المرور إلى بريدك. افحص صندوق الوارد (وملف السبام)."
-          : "We sent a password reset link to your email. Check your inbox (and spam).",
+          ? "تم تغيير كلمة المرور. يمكنك الآن تسجيل الدخول."
+          : "Password changed. You can now sign in.",
       );
+      setShowReset(false);
+      setResetCode("");
+      setResetPassword("");
+      setMode("login");
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
-      toast.error(
-        /rate|limit/i.test(raw)
-          ? ar
-            ? "تم إرسال عدد كبير من الرسائل، حاول بعد قليل."
-            : "Too many emails sent, try again shortly."
-          : raw || (ar ? "تعذّر إرسال الرسالة" : "Could not send the email"),
-      );
+      toast.error(raw || (ar ? "تعذّر إعادة تعيين كلمة المرور" : "Could not reset password"));
     } finally {
-      setSendingReset(false);
+      setResetting(false);
     }
   };
 
@@ -292,29 +311,76 @@ function AuthPage() {
             {mode === "login" && (
               <button
                 type="button"
-                onClick={() => void sendReset()}
-                disabled={sendingReset}
+                onClick={() => setShowReset(!showReset)}
                 className="text-sm font-medium text-primary hover:underline disabled:opacity-60"
               >
-                {sendingReset
-                  ? (ar ? "جارٍ الإرسال…" : "Sending…")
+                {showReset
+                  ? (ar ? "العودة لتسجيل الدخول" : "Back to sign in")
                   : (ar ? "نسيت كلمة المرور؟" : "Forgot password?")}
               </button>
             )}
           </div>
 
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full rounded-full gradient-hero text-primary-foreground"
-            disabled={loading}
-          >
-            {loading
-              ? (ar ? "جارٍ المعالجة…" : "Processing…")
-              : mode === "login"
-                ? (ar ? "دخول" : "Sign in")
-                : (ar ? "إنشاء الحساب" : "Sign up")}
-          </Button>
+          {showReset && (
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/40 p-4">
+              <p className="text-sm text-muted-foreground">
+                {ar
+                  ? "أدخل السريال الذي اشتريته وكلمة المرور الجديدة."
+                  : "Enter the serial you purchased and your new password."}
+              </p>
+              <form onSubmit={resetWithCode} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="serial">{ar ? "السريال" : "Serial"}</Label>
+                  <Input
+                    id="serial"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    placeholder={ar ? "السريال المشتري" : "Purchased serial"}
+                    className="rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="newPassword">{ar ? "كلمة المرور الجديدة" : "New password"}</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder={ar ? "كلمة مرور جديدة (٦ أحرف على الأقل)" : "New password (min 6 characters)"}
+                    className="rounded-xl"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full rounded-full gradient-hero text-primary-foreground"
+                  disabled={resetting}
+                >
+                  {resetting
+                    ? (ar ? "جارٍ التغيير…" : "Changing…")
+                    : (ar ? "تغيير كلمة المرور" : "Change password")}
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {!showReset && (
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full rounded-full gradient-hero text-primary-foreground"
+              disabled={loading}
+            >
+              {loading
+                ? (ar ? "جارٍ المعالجة…" : "Processing…")
+                : mode === "login"
+                  ? (ar ? "دخول" : "Sign in")
+                  : (ar ? "إنشاء الحساب" : "Sign up")}
+            </Button>
+          )}
         </form>
 
         <div className="mt-6 text-center">
