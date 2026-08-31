@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-import { confirmExistingEmail, signUpDirect } from "@/lib/auth.functions";
+import { confirmExistingEmail, resetPasswordWithCode, signUpDirect } from "@/lib/auth.functions";
 import { useI18n } from "@/lib/i18n";
 import { saveProfile } from "@/lib/subscription.functions";
 
