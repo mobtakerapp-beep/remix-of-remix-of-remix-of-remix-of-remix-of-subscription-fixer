@@ -83,6 +83,77 @@ export const signUpDirect = createServerFn({ method: "POST" })
 
 const emailSchema = z.object({ email: z.string().trim().email().max(255) });
 
+const resetWithCodeSchema = z.object({
+  email: z.string().trim().email().max(255),
+  code: z.string().trim().min(4).max(64),
+  password: z.string().min(6).max(72),
+});
+
+export type ResetWithCodeResult =
+  | { ok: true }
+  | { ok: false; code: "no_account" | "bad_code" | "failed" };
+
+/**
+ * In-app password reset: no email is involved. The user proves ownership with
+ * an activation code (serial) that was previously redeemed on their account,
+ * then chooses a new password.
+ */
+export const resetPasswordWithCode = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => resetWithCodeSchema.parse(input))
+  .handler(async ({ data }): Promise<ResetWithCodeResult> => {
+    let supabaseAdmin;
+    try {
+      ({ supabaseAdmin } = await import("@/integrations/supabase/client.server"));
+    } catch (e) {
+      console.error("[resetPasswordWithCode] admin client unavailable", e);
+      return { ok: false, code: "failed" };
+    }
+
+    // Find the account.
+    let target: { id: string } | undefined;
+    try {
+      const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+      if (error) throw error;
+      target = list.users.find(
+        (u) => (u.email ?? "").toLowerCase() === data.email.toLowerCase(),
+      );
+    } catch (e) {
+      console.error("[resetPasswordWithCode] listUsers failed", e);
+      return { ok: false, code: "failed" };
+    }
+    if (!target) return { ok: false, code: "no_account" };
+
+    // Verify the serial was redeemed by this account.
+    const serial = data.code.toUpperCase();
+    const { data: codeRow } = await supabaseAdmin
+      .from("activation_codes")
+      .select("id")
+      .eq("code", serial)
+      .maybeSingle();
+    if (!codeRow) return { ok: false, code: "bad_code" };
+
+    const { data: redemption } = await supabaseAdmin
+      .from("code_redemptions")
+      .select("id")
+      .eq("code_id", codeRow.id)
+      .eq("user_id", target.id)
+      .maybeSingle();
+    if (!redemption) return { ok: false, code: "bad_code" };
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      target.id,
+      { password: data.password },
+    );
+    if (updateError) {
+      console.error("[resetPasswordWithCode] update failed", updateError);
+      return { ok: false, code: "failed" };
+    }
+    return { ok: true };
+  });
+
 /**
  * Marks an existing account's email as confirmed. Used to unblock accounts
  * that were created before confirmation was turned off.
