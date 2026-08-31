@@ -72,34 +72,49 @@ function AuthPage() {
     else localStorage.removeItem("remembered_email");
   };
 
-  const sendReset = async () => {
-    const target = email.trim();
-    if (!target) {
-      toast.error(ar ? "اكتب بريدك الإلكتروني أولاً." : "Enter your email first.");
+  const resetWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = email.trim();
+    if (!targetEmail || !resetCode.trim() || !resetPassword.trim()) {
+      toast.error(ar ? "أكمل جميع الحقول." : "Fill in all fields.");
       return;
     }
-    setSendingReset(true);
+    setResetting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(target, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const result = await resetPasswordFn({
+        data: {
+          email: targetEmail,
+          code: resetCode.trim(),
+          password: resetPassword,
+        },
       });
-      if (error) throw error;
+      if (!result.ok) {
+        if (result.code === "no_account") {
+          throw new Error(ar ? "لا يوجد حساب بهذا البريد." : "No account found with this email.");
+        }
+        if (result.code === "bad_code") {
+          throw new Error(
+            ar
+              ? "السريال غير صحيح أو غير مرتبط بهذا الحساب."
+              : "Invalid serial or not linked to this account.",
+          );
+        }
+        throw new Error(ar ? "تعذّر إعادة تعيين كلمة المرور." : "Could not reset password.");
+      }
       toast.success(
         ar
-          ? "أرسلنا رابط تغيير كلمة المرور إلى بريدك. افحص صندوق الوارد (وملف السبام)."
-          : "We sent a password reset link to your email. Check your inbox (and spam).",
+          ? "تم تغيير كلمة المرور. يمكنك الآن تسجيل الدخول."
+          : "Password changed. You can now sign in.",
       );
+      setShowReset(false);
+      setResetCode("");
+      setResetPassword("");
+      setMode("login");
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
-      toast.error(
-        /rate|limit/i.test(raw)
-          ? ar
-            ? "تم إرسال عدد كبير من الرسائل، حاول بعد قليل."
-            : "Too many emails sent, try again shortly."
-          : raw || (ar ? "تعذّر إرسال الرسالة" : "Could not send the email"),
-      );
+      toast.error(raw || (ar ? "تعذّر إعادة تعيين كلمة المرور" : "Could not reset password"));
     } finally {
-      setSendingReset(false);
+      setResetting(false);
     }
   };
 
