@@ -36,14 +36,18 @@ function AuthPage() {
   const createAccount = useServerFn(signUpDirect);
   const confirmEmail = useServerFn(confirmExistingEmail);
   const saveProfileFn = useServerFn(saveProfile);
+  const resetPasswordFn = useServerFn(resetPasswordWithCode);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [remember, setRemember] = useState(true);
-  const [sendingReset, setSendingReset] = useState(false);
   const [password, setPassword] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [school, setSchool] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
   const ar = lang === "ar";
 
   useEffect(() => {
