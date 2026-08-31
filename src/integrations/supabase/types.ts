@@ -26,7 +26,6 @@ export type Database = {
           max_uses: number
           note: string | null
           plan: string
-          updated_at: string
           used_count: number
         }
         Insert: {
@@ -40,7 +39,6 @@ export type Database = {
           max_uses?: number
           note?: string | null
           plan: string
-          updated_at?: string
           used_count?: number
         }
         Update: {
@@ -54,7 +52,6 @@ export type Database = {
           max_uses?: number
           note?: string | null
           plan?: string
-          updated_at?: string
           used_count?: number
         }
         Relationships: []
@@ -122,22 +119,22 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          school: string | null
-          teacher_name: string | null
+          school: string
+          teacher_name: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           id: string
-          school?: string | null
-          teacher_name?: string | null
+          school?: string
+          teacher_name?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
-          school?: string | null
-          teacher_name?: string | null
+          school?: string
+          teacher_name?: string
           updated_at?: string
         }
         Relationships: []
@@ -159,7 +156,7 @@ export type Database = {
           expires_at?: string | null
           generations_used?: number
           id?: string
-          plan: string
+          plan?: string
           reset_at?: string
           status?: string
           updated_at?: string
@@ -207,16 +204,19 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
+          created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
+          created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
