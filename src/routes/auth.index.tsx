@@ -367,18 +367,20 @@ function AuthPage() {
             </div>
           )}
 
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full rounded-full gradient-hero text-primary-foreground"
-            disabled={loading}
-          >
-            {loading
-              ? (ar ? "جارٍ المعالجة…" : "Processing…")
-              : mode === "login"
-                ? (ar ? "دخول" : "Sign in")
-                : (ar ? "إنشاء الحساب" : "Sign up")}
-          </Button>
+          {!showReset && (
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full rounded-full gradient-hero text-primary-foreground"
+              disabled={loading}
+            >
+              {loading
+                ? (ar ? "جارٍ المعالجة…" : "Processing…")
+                : mode === "login"
+                  ? (ar ? "دخول" : "Sign in")
+                  : (ar ? "إنشاء الحساب" : "Sign up")}
+            </Button>
+          )}
         </form>
 
         <div className="mt-6 text-center">
