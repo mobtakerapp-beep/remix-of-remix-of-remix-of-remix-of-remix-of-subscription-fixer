@@ -1,14 +1,19 @@
-# Welcome to your Lovable project
+# Subscription Fixer
+
+gh repo clone mobtakerapp-beep/remix-of-remix-of-remix-of-remix-of-subscription-fixerحمل البرنامج وشوف الخطا الى بيخلي لما افتح البنرامج على الرابط ده تدينش شاشة بيضا 
+https://mulakhasy-ai.mobtakerapp.workers.dev/
+ويوقولي 
+Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html". Strict MIME type checking is enforced for module scripts per HTML spec.
 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/7003bbbb-219f-4382-99a7-09676224ec0b).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +25,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
