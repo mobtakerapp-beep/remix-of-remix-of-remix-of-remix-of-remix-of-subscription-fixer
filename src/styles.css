@@ -59,24 +59,34 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-emerald: var(--emerald);
+  --color-emerald-foreground: var(--emerald-foreground);
+  --color-amber: var(--amber);
+  --color-amber-foreground: var(--amber-foreground);
+  --font-display: "Baloo 2", "Cairo", system-ui, sans-serif;
+  --font-sans: "Cairo", system-ui, sans-serif;
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --background: oklch(0.985 0.008 275);
+  --foreground: oklch(0.22 0.04 275);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.52 0.19 275);
+  --primary-foreground: oklch(0.99 0.005 275);
+  --secondary: oklch(0.96 0.02 275);
+  --secondary-foreground: oklch(0.36 0.12 275);
   --muted: oklch(0.968 0.007 247.896);
   --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --accent: oklch(0.95 0.05 160);
+  --accent-foreground: oklch(0.38 0.11 160);
+  --emerald: oklch(0.62 0.15 160);
+  --emerald-foreground: oklch(0.99 0.01 160);
+  --amber: oklch(0.79 0.16 78);
+  --amber-foreground: oklch(0.31 0.08 78);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(0.929 0.013 255.508);
@@ -110,8 +120,12 @@
   --secondary-foreground: oklch(0.984 0.003 247.858);
   --muted: oklch(0.279 0.041 260.031);
   --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
+  --accent: oklch(0.32 0.06 160);
+  --accent-foreground: oklch(0.95 0.02 160);
+  --emerald: oklch(0.68 0.14 160);
+  --emerald-foreground: oklch(0.18 0.03 160);
+  --amber: oklch(0.82 0.15 78);
+  --amber-foreground: oklch(0.26 0.06 78);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
@@ -141,4 +155,165 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+@theme {
+  --shadow-soft: 0 10px 30px -12px color-mix(in oklab, var(--primary) 35%, transparent);
+  --shadow-lift: 0 20px 45px -20px color-mix(in oklab, var(--primary) 45%, transparent);
+}
+
+@utility gradient-hero {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 90%, black),
+    var(--primary) 45%,
+    var(--emerald)
+  );
+}
+
+@utility gradient-warm {
+  background-image: linear-gradient(120deg, var(--amber), var(--emerald));
+}
+
+@utility flip-card {
+  perspective: 1200px;
+
+  & > .flip-inner {
+    position: relative;
+    transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  &[data-flipped="true"] > .flip-inner {
+    transform: rotateY(180deg);
+  }
+
+  & .flip-face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  & .flip-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+  }
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@utility no-print {
+  @media print {
+    display: none !important;
+  }
+}
+
+@media print {
+  html,
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .worksheet-export {
+    background: white;
+    color: black;
+    font-size: 11.5pt;
+    line-height: 1.7;
+    padding: 2mm 3mm;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .worksheet-export * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .worksheet-export img,
+  .worksheet-export svg {
+    display: block !important;
+    opacity: 1 !important;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .worksheet-export .sheet-mascot {
+    max-height: 52px;
+    width: auto;
+  }
+
+  .worksheet-export section,
+  .worksheet-export li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-6deg) translateY(0); }
+  50% { transform: rotate(6deg) translateY(-4px); }
+}
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+@utility animate-pop { animation: pop 0.4s ease-out; }
+@utility animate-shake { animation: shake 0.45s ease-in-out; }
+@utility animate-wiggle { animation: wiggle 1.6s ease-in-out infinite; }
+@utility animate-bounce-slow { animation: bounce-slow 2s ease-in-out infinite; }
+@utility animate-float-soft { animation: float-soft 5s ease-in-out infinite; }
+
+@utility blob-bg {
+  background-image:
+    radial-gradient(60rem 30rem at 10% -10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 60%),
+    radial-gradient(50rem 26rem at 100% 0%, color-mix(in oklab, var(--emerald) 20%, transparent), transparent 60%),
+    radial-gradient(45rem 24rem at 50% 110%, color-mix(in oklab, var(--amber) 22%, transparent), transparent 60%);
+}
+
+
+
+/* Force a light, flat rendering while rasterizing to PDF (avoids black pages) */
+.pdf-exporting {
+  background: #ffffff !important;
+  color: #111111 !important;
+}
+.pdf-exporting * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  box-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
 }
