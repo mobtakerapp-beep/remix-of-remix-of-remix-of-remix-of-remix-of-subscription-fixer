@@ -311,16 +311,61 @@ function AuthPage() {
             {mode === "login" && (
               <button
                 type="button"
-                onClick={() => void sendReset()}
-                disabled={sendingReset}
+                onClick={() => setShowReset(!showReset)}
                 className="text-sm font-medium text-primary hover:underline disabled:opacity-60"
               >
-                {sendingReset
-                  ? (ar ? "جارٍ الإرسال…" : "Sending…")
+                {showReset
+                  ? (ar ? "العودة لتسجيل الدخول" : "Back to sign in")
                   : (ar ? "نسيت كلمة المرور؟" : "Forgot password?")}
               </button>
             )}
           </div>
+
+          {showReset && (
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/40 p-4">
+              <p className="text-sm text-muted-foreground">
+                {ar
+                  ? "أدخل السريال الذي اشتريته وكلمة المرور الجديدة."
+                  : "Enter the serial you purchased and your new password."}
+              </p>
+              <form onSubmit={resetWithCode} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="serial">{ar ? "السريال" : "Serial"}</Label>
+                  <Input
+                    id="serial"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    placeholder={ar ? "السريال المشتري" : "Purchased serial"}
+                    className="rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="newPassword">{ar ? "كلمة المرور الجديدة" : "New password"}</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder={ar ? "كلمة مرور جديدة (٦ أحرف على الأقل)" : "New password (min 6 characters)"}
+                    className="rounded-xl"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full rounded-full gradient-hero text-primary-foreground"
+                  disabled={resetting}
+                >
+                  {resetting
+                    ? (ar ? "جارٍ التغيير…" : "Changing…")
+                    : (ar ? "تغيير كلمة المرور" : "Change password")}
+                </Button>
+              </form>
+            </div>
+          )}
 
           <Button
             type="submit"
