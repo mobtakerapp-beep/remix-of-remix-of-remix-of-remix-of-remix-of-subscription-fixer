@@ -1,4 +1,7 @@
-/** Server-only helpers to pull a transcript from a YouTube video. */
+/**
+ * Server-only helpers to pull a transcript from a YouTube video.
+ * Throws: youtube_invalid_url, youtube_no_captions, openai_quota, openai_invalid_key.
+ */
 
 import { parseYoutubeId } from "./youtube-url";
 

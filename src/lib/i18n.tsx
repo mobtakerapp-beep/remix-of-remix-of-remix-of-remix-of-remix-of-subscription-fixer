@@ -99,7 +99,9 @@ const dict = {
     youtubePlaceholder: "الصق رابط فيديو يوتيوب هنا…",
     youtubeHint: "نجلب النص المكتوب (الترجمة) للفيديو ونحوّله إلى درس وأسئلة.",
     errYoutubeUrl: "رابط يوتيوب غير صالح",
-    errYoutubeCaptions: "هذا الفيديو بدون ترجمة نصية، جرّب فيديو آخر.",
+    errYoutubeCaptions: "تعذّر استخراج نص من هذا الفيديو، جرّب فيديو آخر.",
+    errOpenaiQuota: "رصيد OpenAI انتهى — اشحنِ الرصيد من حسابك ثم أعيدي المحاولة.",
+    errOpenaiKey: "مفتاح OpenAI غير صالح.",
     errYoutubeFetch: "تعذّر جلب الفيديو، حاول مرة أخرى.",
   },
   en: {
@@ -198,7 +200,9 @@ const dict = {
     youtubePlaceholder: "Paste a YouTube video link here…",
     youtubeHint: "We fetch the video captions and turn them into a lesson with questions.",
     errYoutubeUrl: "Invalid YouTube link",
-    errYoutubeCaptions: "This video has no captions. Try another video.",
+    errYoutubeCaptions: "Couldn't extract text from this video. Try another video.",
+    errOpenaiQuota: "OpenAI credits are exhausted — top up your account and try again.",
+    errOpenaiKey: "The OpenAI key is invalid.",
     errYoutubeFetch: "Could not fetch the video, please try again.",
   },
 };
