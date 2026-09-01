@@ -36,14 +36,15 @@ export const generateLessonPackage = createServerFn({ method: "POST" })
       );
     }
 
-    const key = process.env["OPENAI_API_KEY"];
-    if (!key) throw new Error("Missing OPENAI_API_KEY");
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
     const { buildLessonPackage } = await import("./lesson.server");
 
     if (data.mode === "youtube") {
       const { fetchYoutubeTranscript } = await import("./youtube.server");
-      const { title, text } = await fetchYoutubeTranscript(data.youtubeUrl ?? "", key);
+      const transcriptKey = process.env["OPENAI_API_KEY"] ?? key;
+      const { title, text } = await fetchYoutubeTranscript(data.youtubeUrl ?? "", transcriptKey);
       const { youtubeUrl: _ignored, ...rest } = data;
       return buildLessonPackage(
         { ...rest, mode: "text", text: `${title}\n\n${text}` },

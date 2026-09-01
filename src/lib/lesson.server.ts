@@ -268,54 +268,43 @@ export async function buildLessonPackage(data: Input, apiKey: string): Promise<L
     });
   }
 
-  const inputContent = parts.map((part) => {
-    if (part.type === "text") return { type: "input_text" as const, text: part.text };
+  const messageContent = parts.map((part) => {
+    if (part.type === "text") return { type: "text" as const, text: part.text };
     if (part.type === "image_url") {
-      return { type: "input_image" as const, image_url: part.image_url.url };
+      return { type: "image_url" as const, image_url: { url: part.image_url.url } };
     }
     return {
-      type: "input_file" as const,
-      filename: part.file.filename,
-      file_data: part.file.file_data,
+      type: "file" as const,
+      file: { filename: part.file.filename, file_data: part.file.file_data },
     };
   });
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
-      input: [{ role: "user", content: inputContent }],
-      text: { format: { type: "json_object" } },
-      max_output_tokens: 16000,
+      model: "google/gemini-2.5-flash",
+      messages: [{ role: "user", content: messageContent }],
+      response_format: { type: "json_object" },
+      max_tokens: 16000,
     }),
   });
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     if (response.status === 429) throw new Error("Too many requests right now. Please wait a moment and try again.");
-    if (response.status === 401) throw new Error("The OpenAI key was rejected. Check the project secret.");
+    if (response.status === 402) throw new Error("AI credits are exhausted. Please top up the workspace.");
+    if (response.status === 401) throw new Error("The AI key was rejected.");
     throw new Error(`AI request failed (${response.status}). ${detail.slice(0, 300)}`);
   }
 
   const json = (await response.json()) as {
-    output_text?: string;
-    output?: Array<{
-      type?: string;
-      content?: Array<{ type?: string; text?: string }>;
-    }>;
+    choices?: Array<{ message?: { content?: string } }>;
   };
-  const text =
-    json.output_text ??
-    json.output
-      ?.flatMap((item) => item.content ?? [])
-      .filter((item) => item.type === "output_text")
-      .map((item) => item.text ?? "")
-      .join("") ??
-    "";
+  const text = json.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) throw new Error("The AI returned an empty response. Please try again.");
   return normalize(extractJson(text), data);
 }
