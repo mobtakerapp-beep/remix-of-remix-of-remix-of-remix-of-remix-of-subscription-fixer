@@ -28,6 +28,13 @@ type CaptionTrack = {
   name?: { simpleText?: string };
 };
 
+type AudioFormat = {
+  mimeType?: string;
+  bitrate?: number;
+  contentLength?: string;
+  url?: string;
+};
+
 function extractJson<T>(html: string, key: string): T | null {
   const idx = html.indexOf(key);
   if (idx === -1) return null;
@@ -154,13 +161,7 @@ async function callInnertube(videoId: string) {
           playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
         };
         streamingData?: {
-          adaptiveFormats?: {
-            itag?: number;
-            mimeType?: string;
-            bitrate?: number;
-            contentLength?: string;
-            url?: string;
-          }[];
+          adaptiveFormats?: AudioFormat[];
         };
       };
       return json;
@@ -185,6 +186,39 @@ async function fetchInnertube(
 
 // OpenAI transcription upload limit is 25MB.
 const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
+
+function audioFileDetails(mimeType: string | undefined) {
+  const normalized = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (normalized === "audio/webm") return { mime: "audio/webm", name: "youtube-audio.webm" };
+  if (normalized === "audio/mpeg") return { mime: "audio/mpeg", name: "youtube-audio.mp3" };
+  if (normalized === "audio/wav") return { mime: "audio/wav", name: "youtube-audio.wav" };
+  return { mime: "audio/mp4", name: "youtube-audio.m4a" };
+}
+
+async function readTranscriptionResponse(response: Response): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/event-stream")) {
+    const result = (await response.json()) as { text?: string };
+    return result.text?.trim() ?? "";
+  }
+
+  const body = await response.text();
+  let finalText = "";
+  let streamedText = "";
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const event = JSON.parse(payload) as { type?: string; delta?: string; text?: string };
+      if (event.type === "transcript.text.delta" && event.delta) streamedText += event.delta;
+      if (event.type === "transcript.text.done" && event.text) finalText = event.text;
+    } catch {
+      // Ignore keep-alive or provider-specific SSE lines.
+    }
+  }
+  return (finalText || streamedText).trim();
+}
 
 /**
  * Caption-free fallback: download the video's audio track directly from
@@ -217,26 +251,25 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
   );
   if (formats.length === 0) return "";
 
-  // Smallest bitrate first so we stay under the 25MB upload limit.
-  formats.sort((a, b) => (a.bitrate ?? Infinity) - (b.bitrate ?? Infinity));
+  // A truncated compressed container is frequently rejected as corrupt. Only
+  // upload complete audio files that fit the transcription endpoint limit.
+  const completeFormats = formats
+    .filter((format) => {
+      const size = Number(format.contentLength ?? 0);
+      return Number.isFinite(size) && size > 0 && size <= WHISPER_MAX_BYTES;
+    })
+    .sort((a, b) => (a.bitrate ?? Infinity) - (b.bitrate ?? Infinity));
+  if (completeFormats.length === 0) return "";
 
   let lastError: Error | null = null;
 
-  for (const format of formats.slice(0, 4)) {
+  for (const format of completeFormats.slice(0, 4)) {
     let audio: Uint8Array;
-    let isWebm = false;
     try {
-      const size = Number(format.contentLength ?? 0);
-      const headers: Record<string, string> = { "User-Agent": UA };
-      // Cap the download; a partial m4a/webm still decodes the covered minutes.
-      if (!size || size > WHISPER_MAX_BYTES) {
-        headers["Range"] = `bytes=0-${WHISPER_MAX_BYTES - 1}`;
-      }
-      const res = await fetch(format.url!, { headers });
-      if (!res.ok && res.status !== 206) continue;
+      const res = await fetch(format.url ?? "", { headers: { "User-Agent": UA } });
+      if (!res.ok) continue;
       audio = new Uint8Array(await res.arrayBuffer());
-      if (audio.length < 1024) continue;
-      isWebm = format.mimeType!.includes("webm");
+      if (audio.length < 1024 || audio.length > WHISPER_MAX_BYTES) continue;
     } catch {
       continue;
     }
@@ -244,13 +277,15 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
     for (const p of providers) {
       try {
         const form = new FormData();
+        const file = audioFileDetails(format.mimeType);
         form.append(
           "file",
-          new Blob([audio.slice().buffer as ArrayBuffer], { type: isWebm ? "audio/webm" : "audio/mp4" }),
-          isWebm ? "youtube-audio.webm" : "youtube-audio.m4a",
+          new Blob([audio.slice().buffer as ArrayBuffer], { type: file.mime }),
+          file.name,
         );
         form.append("model", p.model);
         form.append("response_format", "json");
+        form.append("stream", "true");
 
         const response = await fetch(p.url, {
           method: "POST",
@@ -264,8 +299,7 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
           continue;
         }
 
-        const out = (await response.json()) as { text?: string };
-        const text = (out.text ?? "").replace(/\s{2,}/g, " ").trim();
+        const text = (await readTranscriptionResponse(response)).replace(/\s{2,}/g, " ").trim();
         if (text) return text;
       } catch {
         /* try next provider */
@@ -350,8 +384,9 @@ export async function fetchYoutubeTranscript(
     }
   }
 
-  // No captions at all → transcribe the audio itself with OpenAI.
-  if (text.length < 40 && apiKey) {
+  // No captions at all → transcribe the audio itself. Lovable AI is the
+  // primary provider, so this must run even when no direct OpenAI key exists.
+  if (text.length < 40) {
     text = await transcribeYoutubeAudio(videoId, apiKey);
   }
 
