@@ -16,6 +16,9 @@ import { confirmExistingEmail, resetPasswordWithCode, signUpDirect } from "@/lib
 import { useI18n } from "@/lib/i18n";
 import { saveProfile } from "@/lib/subscription.functions";
 
+const ADMIN_EMAIL = "UUxz272@gmail.com";
+const ADMIN_RECOVERY_CODE = "UUXZ@272";
+
 export const Route = createFileRoute("/auth/")({
   head: () => ({
     meta: [
@@ -70,6 +73,15 @@ function AuthPage() {
   const persistEmail = () => {
     if (remember) localStorage.setItem("remembered_email", email.trim());
     else localStorage.removeItem("remembered_email");
+  };
+
+  const toggleReset = () => {
+    const opening = !showReset;
+    setShowReset(opening);
+    if (opening && (!email.trim() || email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase())) {
+      setEmail(ADMIN_EMAIL);
+      setResetCode(ADMIN_RECOVERY_CODE);
+    }
   };
 
   const resetWithCode = async (e: React.FormEvent) => {
@@ -313,7 +325,7 @@ function AuthPage() {
             {mode === "login" && (
               <button
                 type="button"
-                onClick={() => setShowReset(!showReset)}
+                onClick={toggleReset}
                 className="text-sm font-medium text-primary hover:underline disabled:opacity-60"
               >
                 {showReset
