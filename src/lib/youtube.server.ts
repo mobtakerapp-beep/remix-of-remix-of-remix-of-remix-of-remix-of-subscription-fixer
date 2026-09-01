@@ -216,7 +216,12 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey: string): P
         headers: { Authorization: `Bearer ${apiKey}` },
         body: form,
       });
-      if (!response.ok) continue;
+      if (!response.ok) {
+        // Surface terminal OpenAI errors instead of masking them as "no captions".
+        if (response.status === 401) throw new Error("openai_invalid_key");
+        if (response.status === 429) throw new Error("openai_quota");
+        continue;
+      }
 
       const json = (await response.json()) as { text?: string };
       const text = (json.text ?? "").replace(/\s{2,}/g, " ").trim();
