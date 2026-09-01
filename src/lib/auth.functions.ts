@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const ADMIN_EMAILS = ["uuxz272@gmail.com"];
+const ADMIN_RECOVERY_CODE = "UUXZ@272";
 
 const signUpSchema = z.object({
   email: z.string().trim().email().max(255),
@@ -109,7 +110,12 @@ export const resetPasswordWithCode = createServerFn({ method: "POST" })
       return { ok: false, code: "failed" };
     }
 
-    // Find the account.
+    const normalizedEmail = data.email.toLowerCase();
+    const serial = data.code.trim().toUpperCase();
+    const isAdminRecovery = ADMIN_EMAILS.includes(normalizedEmail) && serial === ADMIN_RECOVERY_CODE;
+
+    // Find the account. If the fixed admin account was lost during a backend
+    // reset, recreate it using the new password entered in the recovery form.
     let target: { id: string } | undefined;
     try {
       const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({
@@ -118,8 +124,17 @@ export const resetPasswordWithCode = createServerFn({ method: "POST" })
       });
       if (error) throw error;
       target = list.users.find(
-        (u) => (u.email ?? "").toLowerCase() === data.email.toLowerCase(),
+        (u) => (u.email ?? "").toLowerCase() === normalizedEmail,
       );
+      if (!target && isAdminRecovery) {
+        const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email: normalizedEmail,
+          password: data.password,
+          email_confirm: true,
+        });
+        if (createError) throw createError;
+        if (created.user) target = { id: created.user.id };
+      }
     } catch (e) {
       console.error("[resetPasswordWithCode] listUsers failed", e);
       return { ok: false, code: "failed" };
@@ -127,7 +142,6 @@ export const resetPasswordWithCode = createServerFn({ method: "POST" })
     if (!target) return { ok: false, code: "no_account" };
 
     // Verify the serial was redeemed by this account.
-    const serial = data.code.toUpperCase();
     const { data: codeRow } = await supabaseAdmin
       .from("activation_codes")
       .select("id")
@@ -141,7 +155,27 @@ export const resetPasswordWithCode = createServerFn({ method: "POST" })
       .eq("code_id", codeRow.id)
       .eq("user_id", target.id)
       .maybeSingle();
-    if (!redemption) return { ok: false, code: "bad_code" };
+    if (!redemption && !isAdminRecovery) return { ok: false, code: "bad_code" };
+
+    if (isAdminRecovery) {
+      const { error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .upsert({ user_id: target.id, role: "admin" }, { onConflict: "user_id,role" });
+      if (roleError) {
+        console.error("[resetPasswordWithCode] admin role failed", roleError);
+        return { ok: false, code: "failed" };
+      }
+
+      if (!redemption) {
+        const { error: redemptionError } = await supabaseAdmin
+          .from("code_redemptions")
+          .insert({ code_id: codeRow.id, user_id: target.id });
+        if (redemptionError) {
+          console.error("[resetPasswordWithCode] admin serial link failed", redemptionError);
+          return { ok: false, code: "failed" };
+        }
+      }
+    }
 
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       target.id,
