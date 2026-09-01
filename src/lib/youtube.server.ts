@@ -1,10 +1,7 @@
-/** Server-only helpers to pull a transcript from a YouTube video. */
-
-import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+/**
+ * Server-only helpers to pull a transcript from a YouTube video.
+ * Throws: youtube_invalid_url, youtube_no_captions, openai_quota, openai_invalid_key.
+ */
 
 import { parseYoutubeId } from "./youtube-url";
 
@@ -12,7 +9,6 @@ export { parseYoutubeId };
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-const execFileAsync = promisify(execFile);
 
 function decodeEntities(s: string) {
   return s
@@ -100,83 +96,35 @@ async function fetchTrackText(baseUrl: string): Promise<string> {
     .trim();
 }
 
-async function transcribeYoutubeAudio(videoId: string, apiKey: string): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "subscription-fixer-"));
-  const outputTemplate = path.join(dir, "audio.%(ext)s");
-
-  try {
-    await execFileAsync(
-      "yt-dlp",
-      [
-        "--no-playlist",
-        "--no-progress",
-        "--no-warnings",
-        "--extract-audio",
-        "--audio-format",
-        "mp3",
-        "--audio-quality",
-        "9",
-        "--max-filesize",
-        "80M",
-        "--output",
-        outputTemplate,
-        `https://www.youtube.com/watch?v=${videoId}`,
-      ],
-      { timeout: 180_000, maxBuffer: 2 * 1024 * 1024 },
-    );
-
-    const audioName = (await readdir(dir)).find((name) => name.endsWith(".mp3"));
-    if (!audioName) return "";
-    const audio = await readFile(path.join(dir, audioName));
-    if (audio.length === 0) return "";
-
-    const form = new FormData();
-    form.append("file", new Blob([audio], { type: "audio/mpeg" }), "youtube-audio.mp3");
-    form.append("model", "gpt-4o-mini-transcribe");
-    form.append("response_format", "json");
-
-    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
-    if (!response.ok) return "";
-
-    const json = (await response.json()) as { text?: string };
-    return (json.text ?? "").replace(/\s{2,}/g, " ").trim();
-  } catch {
-    return "";
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  }
-}
-
-
-/** Ask YouTube's internal player API for caption tracks (works when the watch HTML has none). */
-async function fetchInnertube(
-  videoId: string,
-): Promise<{ title: string; tracks: CaptionTrack[] } | null> {
-  const clients = [
-    {
-      key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-      context: {
-        client: {
-          clientName: "ANDROID",
-          clientVersion: "19.09.37",
-          androidSdkVersion: 30,
-          hl: "en",
-          },
+const INNERTUBE_CLIENTS = [
+  {
+    key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+    context: {
+      client: {
+        clientName: "ANDROID",
+        clientVersion: "20.10.38",
+        androidSdkVersion: 35,
+        hl: "en",
       },
-      ua: "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
     },
-    {
-      key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-      context: { client: { clientName: "WEB", clientVersion: "2.20240401.00.00", hl: "en" } },
-      ua: UA,
+    ua: "com.google.android.youtube/20.10.38 (Linux; U; Android 15) gzip",
+  },
+  {
+    key: "AIzaSyB-8OLtTu4pDhQ2bK7ClB6KB_xVvM7X0xY",
+    context: {
+      client: {
+        clientName: "IOS",
+        clientVersion: "20.10.4",
+        deviceModel: "iPhone16,2",
+        hl: "en",
+      },
     },
-  ];
+    ua: "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3 like Mac OS X)",
+  },
+] as const;
 
-  for (const c of clients) {
+async function callInnertube(videoId: string) {
+  for (const c of INNERTUBE_CLIENTS) {
     try {
       const res = await fetch(
         `https://www.youtube.com/youtubei/v1/player?key=${c.key}&prettyPrint=false`,
@@ -188,21 +136,101 @@ async function fetchInnertube(
       );
       if (!res.ok) continue;
       const json = (await res.json()) as {
-        videoDetails?: { title?: string };
+        videoDetails?: { title?: string; lengthSeconds?: string };
         captions?: {
           playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
         };
+        streamingData?: {
+          adaptiveFormats?: {
+            itag?: number;
+            mimeType?: string;
+            bitrate?: number;
+            contentLength?: string;
+            url?: string;
+          }[];
+        };
       };
-      const tracks =
-        json.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
-      if (tracks.length > 0) {
-        return { title: json.videoDetails?.title ?? "", tracks };
-      }
+      return json;
     } catch {
       /* try next client */
     }
   }
   return null;
+}
+
+/** Ask YouTube's internal player API for caption tracks (works when the watch HTML has none). */
+async function fetchInnertube(
+  videoId: string,
+): Promise<{ title: string; tracks: CaptionTrack[] } | null> {
+  const json = await callInnertube(videoId);
+  if (!json) return null;
+  const tracks =
+    json.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+  if (tracks.length === 0) return null;
+  return { title: json.videoDetails?.title ?? "", tracks };
+}
+
+// OpenAI transcription upload limit is 25MB.
+const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
+
+/**
+ * Caption-free fallback: download the video's audio track directly from
+ * YouTube's streaming data and transcribe it with OpenAI. Pure fetch, so it
+ * runs in the edge runtime (no yt-dlp / child_process).
+ */
+export async function transcribeYoutubeAudio(videoId: string, apiKey: string): Promise<string> {
+  const json = await callInnertube(videoId);
+  const formats = (json?.streamingData?.adaptiveFormats ?? []).filter(
+    (f) => f.mimeType?.startsWith("audio/") && f.url,
+  );
+  if (formats.length === 0) return "";
+
+  // Smallest bitrate first so we stay under the 25MB upload limit.
+  formats.sort((a, b) => (a.bitrate ?? Infinity) - (b.bitrate ?? Infinity));
+
+  for (const format of formats.slice(0, 4)) {
+    try {
+      const size = Number(format.contentLength ?? 0);
+      const headers: Record<string, string> = { "User-Agent": UA };
+      // Cap the download; a partial m4a/webm still decodes the covered minutes.
+      if (!size || size > WHISPER_MAX_BYTES) {
+        headers["Range"] = `bytes=0-${WHISPER_MAX_BYTES - 1}`;
+      }
+      const res = await fetch(format.url!, { headers });
+      if (!res.ok && res.status !== 206) continue;
+      const audio = new Uint8Array(await res.arrayBuffer());
+      if (audio.length < 1024) continue;
+
+      const isWebm = format.mimeType!.includes("webm");
+      const form = new FormData();
+      form.append(
+        "file",
+        new Blob([audio], { type: isWebm ? "audio/webm" : "audio/mp4" }),
+        isWebm ? "youtube-audio.webm" : "youtube-audio.m4a",
+      );
+      form.append("model", "gpt-4o-mini-transcribe");
+      form.append("response_format", "json");
+
+      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      });
+      if (!response.ok) {
+        // Surface terminal OpenAI errors instead of masking them as "no captions".
+        if (response.status === 401) throw new Error("openai_invalid_key");
+        if (response.status === 429) throw new Error("openai_quota");
+        continue;
+      }
+
+      const json = (await response.json()) as { text?: string };
+      const text = (json.text ?? "").replace(/\s{2,}/g, " ").trim();
+      if (text) return text;
+    } catch {
+      /* try next audio format */
+    }
+  }
+  return "";
 }
 
 export type YoutubeTranscript = { videoId: string; title: string; text: string };
@@ -264,8 +292,8 @@ export async function fetchYoutubeTranscript(
     if (text.length >= 40) break;
   }
 
-  // Last-resort: YouTube's public timedtext endpoint (works for some videos
-  // whose caption tracks are missing from the player response).
+  // Last-resort captions: YouTube's public timedtext endpoint (works for some
+  // videos whose caption tracks are missing from the player response).
   if (text.length < 40) {
     for (const lang of ["ar", "en"]) {
       for (const extra of ["", "&kind=asr"]) {
@@ -278,13 +306,12 @@ export async function fetchYoutubeTranscript(
     }
   }
 
+  // No captions at all → transcribe the audio itself with OpenAI.
   if (text.length < 40 && apiKey) {
     text = await transcribeYoutubeAudio(videoId, apiKey);
   }
-
 
   if (text.length < 40) throw new Error("youtube_no_captions");
 
   return { videoId, title: title || "YouTube", text: text.slice(0, 40000) };
 }
-

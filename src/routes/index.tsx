@@ -125,6 +125,10 @@ function Home() {
         toast.error(t.errYoutubeUrl);
       } else if (msg === "youtube_no_captions") {
         toast.error(t.errYoutubeCaptions);
+      } else if (msg === "openai_quota") {
+        toast.error(t.errOpenaiQuota);
+      } else if (msg === "openai_invalid_key") {
+        toast.error(t.errOpenaiKey);
       } else if (msg === "youtube_fetch_failed") {
         toast.error(t.errYoutubeFetch);
       } else if (msg === "Unauthorized" || /unauthorized|401/i.test(msg)) {
