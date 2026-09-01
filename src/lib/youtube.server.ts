@@ -99,19 +99,24 @@ const INNERTUBE_CLIENTS = [
     context: {
       client: {
         clientName: "ANDROID",
-        clientVersion: "19.09.37",
-        androidSdkVersion: 30,
+        clientVersion: "20.10.38",
+        androidSdkVersion: 35,
         hl: "en",
       },
     },
-    ua: "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
+    ua: "com.google.android.youtube/20.10.38 (Linux; U; Android 15) gzip",
   },
   {
-    key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+    key: "AIzaSyB-8OLtTu4pDhQ2bK7ClB6KB_xVvM7X0xY",
     context: {
-      client: { clientName: "WEB", clientVersion: "2.20240401.00.00", hl: "en" },
+      client: {
+        clientName: "IOS",
+        clientVersion: "20.10.4",
+        deviceModel: "iPhone16,2",
+        hl: "en",
+      },
     },
-    ua: UA,
+    ua: "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3 like Mac OS X)",
   },
 ] as const;
 
