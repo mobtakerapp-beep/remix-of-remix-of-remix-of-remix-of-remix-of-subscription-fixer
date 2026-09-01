@@ -191,7 +191,26 @@ const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
  * YouTube's streaming data and transcribe it with OpenAI. Pure fetch, so it
  * runs in the edge runtime (no yt-dlp / child_process).
  */
-export async function transcribeYoutubeAudio(videoId: string, apiKey: string): Promise<string> {
+export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): Promise<string> {
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  // Prefer Lovable AI (no extra key / quota needed); fall back to OpenAI directly.
+  const providers: { url: string; key: string; model: string; openai: boolean }[] = [];
+  if (lovableKey)
+    providers.push({
+      url: "https://ai.gateway.lovable.dev/v1/audio/transcriptions",
+      key: lovableKey,
+      model: "openai/gpt-4o-transcribe",
+      openai: false,
+    });
+  if (apiKey)
+    providers.push({
+      url: "https://api.openai.com/v1/audio/transcriptions",
+      key: apiKey,
+      model: "gpt-4o-mini-transcribe",
+      openai: true,
+    });
+  if (providers.length === 0) return "";
+
   const json = await callInnertube(videoId);
   const formats = (json?.streamingData?.adaptiveFormats ?? []).filter(
     (f) => f.mimeType?.startsWith("audio/") && f.url,
@@ -201,7 +220,11 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey: string): P
   // Smallest bitrate first so we stay under the 25MB upload limit.
   formats.sort((a, b) => (a.bitrate ?? Infinity) - (b.bitrate ?? Infinity));
 
+  let lastError: Error | null = null;
+
   for (const format of formats.slice(0, 4)) {
+    let audio: Uint8Array;
+    let isWebm = false;
     try {
       const size = Number(format.contentLength ?? 0);
       const headers: Record<string, string> = { "User-Agent": UA };
@@ -211,40 +234,48 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey: string): P
       }
       const res = await fetch(format.url!, { headers });
       if (!res.ok && res.status !== 206) continue;
-      const audio = new Uint8Array(await res.arrayBuffer());
+      audio = new Uint8Array(await res.arrayBuffer());
       if (audio.length < 1024) continue;
-
-      const isWebm = format.mimeType!.includes("webm");
-      const form = new FormData();
-      form.append(
-        "file",
-        new Blob([audio], { type: isWebm ? "audio/webm" : "audio/mp4" }),
-        isWebm ? "youtube-audio.webm" : "youtube-audio.m4a",
-      );
-      form.append("model", "gpt-4o-mini-transcribe");
-      form.append("response_format", "json");
-
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-      });
-      if (!response.ok) {
-        // Surface terminal OpenAI errors instead of masking them as "no captions".
-        if (response.status === 401) throw new Error("openai_invalid_key");
-        if (response.status === 429) throw new Error("openai_quota");
-        continue;
-      }
-
-      const json = (await response.json()) as { text?: string };
-      const text = (json.text ?? "").replace(/\s{2,}/g, " ").trim();
-      if (text) return text;
+      isWebm = format.mimeType!.includes("webm");
     } catch {
-      /* try next audio format */
+      continue;
+    }
+
+    for (const p of providers) {
+      try {
+        const form = new FormData();
+        form.append(
+          "file",
+          new Blob([audio], { type: isWebm ? "audio/webm" : "audio/mp4" }),
+          isWebm ? "youtube-audio.webm" : "youtube-audio.m4a",
+        );
+        form.append("model", p.model);
+        form.append("response_format", "json");
+
+        const response = await fetch(p.url, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${p.key}` },
+          body: form,
+        });
+        if (!response.ok) {
+          if (p.openai && response.status === 401) lastError = new Error("openai_invalid_key");
+          else if (p.openai && (response.status === 429 || response.status === 402))
+            lastError = new Error("openai_quota");
+          continue;
+        }
+
+        const out = (await response.json()) as { text?: string };
+        const text = (out.text ?? "").replace(/\s{2,}/g, " ").trim();
+        if (text) return text;
+      } catch {
+        /* try next provider */
+      }
     }
   }
+  if (lastError) throw lastError;
   return "";
 }
+
 
 export type YoutubeTranscript = { videoId: string; title: string; text: string };
 
