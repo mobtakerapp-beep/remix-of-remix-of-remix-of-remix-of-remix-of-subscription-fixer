@@ -281,22 +281,24 @@ function AuthPage() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="password">{ar ? "كلمة المرور" : "Password"}</Label>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={ar ? "كلمة المرور (٦ أحرف على الأقل)" : "Password (min 6 characters)"}
-                className="rounded-xl ltr:pl-10 rtl:pr-10"
-                required
-                minLength={6}
-              />
+          {!showReset && (
+            <div className="space-y-1.5">
+              <Label htmlFor="password">{ar ? "كلمة المرور" : "Password"}</Label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={ar ? "كلمة المرور (٦ أحرف على الأقل)" : "Password (min 6 characters)"}
+                  className="rounded-xl ltr:pl-10 rtl:pr-10"
+                  required
+                  minLength={6}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
