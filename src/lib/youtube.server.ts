@@ -246,7 +246,7 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
         const form = new FormData();
         form.append(
           "file",
-          new Blob([audio], { type: isWebm ? "audio/webm" : "audio/mp4" }),
+          new Blob([audio.slice().buffer as ArrayBuffer], { type: isWebm ? "audio/webm" : "audio/mp4" }),
           isWebm ? "youtube-audio.webm" : "youtube-audio.m4a",
         );
         form.append("model", p.model);
