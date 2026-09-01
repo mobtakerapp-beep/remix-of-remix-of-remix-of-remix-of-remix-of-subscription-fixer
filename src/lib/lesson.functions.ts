@@ -36,8 +36,8 @@ export const generateLessonPackage = createServerFn({ method: "POST" })
       );
     }
 
-    const key = process.env["OPENAI_API_KEY"];
-    if (!key) throw new Error("Missing OPENAI_API_KEY");
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
     const { buildLessonPackage } = await import("./lesson.server");
 
