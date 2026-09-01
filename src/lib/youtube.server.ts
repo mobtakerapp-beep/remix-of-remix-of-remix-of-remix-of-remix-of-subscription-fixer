@@ -66,9 +66,25 @@ function extractJson<T>(html: string, key: string): T | null {
   return null;
 }
 
+function parseCaptionXml(xml: string): string {
+  // YouTube serves either srv1 (<text>) or srv3 (<p>/<s>) markup.
+  const nodes = [
+    ...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g),
+    ...xml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g),
+  ];
+  return nodes
+    .map((m) => decodeEntities((m[1] ?? "").replace(/<[^>]+>/g, "")))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function fetchTrackText(baseUrl: string): Promise<string> {
-  const url = baseUrl.replace(/&amp;/g, "&");
-  const res = await fetch(`${url}&fmt=json3`, { headers: { "User-Agent": UA } });
+  // Strip any existing fmt so our own format request wins.
+  const url = baseUrl.replace(/&amp;/g, "&").replace(/([?&])fmt=[^&]*/g, "$1");
+
+  const sep = url.includes("?") ? "&" : "?";
+  const res = await fetch(`${url}${sep}fmt=json3`, { headers: { "User-Agent": UA } });
   if (res.ok) {
     const body = await res.text();
     try {
@@ -78,22 +94,19 @@ async function fetchTrackText(baseUrl: string): Promise<string> {
       const text = (json.events ?? [])
         .flatMap((e) => (e.segs ?? []).map((s) => s.utf8 ?? ""))
         .join("")
-        .replace(/\n+/g, " ")
-        .replace(/\s{2,}/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
       if (text) return text;
     } catch {
-      /* fall through to XML */
+      // Not JSON — YouTube returned XML instead; parse it directly.
+      const text = parseCaptionXml(body);
+      if (text) return text;
     }
   }
   const xmlRes = await fetch(url, { headers: { "User-Agent": UA } });
   if (!xmlRes.ok) return "";
-  const xml = await xmlRes.text();
-  return [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
-    .map((m) => decodeEntities(m[1] ?? "").replace(/<[^>]+>/g, ""))
-    .join(" ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return parseCaptionXml(await xmlRes.text());
+
 }
 
 const INNERTUBE_CLIENTS = [
