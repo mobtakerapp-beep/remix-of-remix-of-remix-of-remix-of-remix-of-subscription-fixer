@@ -35,6 +35,17 @@ type AudioFormat = {
   url?: string;
 };
 
+type InnertubePlayer = {
+  playabilityStatus?: { status?: string; reason?: string };
+  videoDetails?: { title?: string; lengthSeconds?: string };
+  captions?: {
+    playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
+  };
+  streamingData?: {
+    adaptiveFormats?: AudioFormat[];
+  };
+};
+
 function extractJson<T>(html: string, key: string): T | null {
   const idx = html.indexOf(key);
   if (idx === -1) return null;
@@ -121,6 +132,19 @@ const INNERTUBE_CLIENTS = [
     key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
     context: {
       client: {
+        clientName: "WEB_EMBEDDED_PLAYER",
+        clientVersion: "1.20250826.00.00",
+        clientScreen: "EMBED",
+        hl: "en",
+      },
+      thirdParty: { embedUrl: "https://www.youtube.com/" },
+    },
+    ua: UA,
+  },
+  {
+    key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+    context: {
+      client: {
         clientName: "ANDROID",
         clientVersion: "20.10.38",
         androidSdkVersion: 35,
@@ -144,6 +168,7 @@ const INNERTUBE_CLIENTS = [
 ] as const;
 
 async function callInnertube(videoId: string) {
+  let bestResponse: InnertubePlayer | null = null;
   for (const c of INNERTUBE_CLIENTS) {
     try {
       const res = await fetch(
@@ -155,21 +180,22 @@ async function callInnertube(videoId: string) {
         },
       );
       if (!res.ok) continue;
-      const json = (await res.json()) as {
-        videoDetails?: { title?: string; lengthSeconds?: string };
-        captions?: {
-          playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
-        };
-        streamingData?: {
-          adaptiveFormats?: AudioFormat[];
-        };
-      };
-      return json;
+      const json = (await res.json()) as InnertubePlayer;
+      if (!bestResponse) bestResponse = json;
+      const hasCaptions = Boolean(
+        json.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length,
+      );
+      const hasDirectAudio = Boolean(
+        json.streamingData?.adaptiveFormats?.some(
+          (format) => format.mimeType?.startsWith("audio/") && format.url,
+        ),
+      );
+      if (hasCaptions || hasDirectAudio) return json;
     } catch {
       /* try next client */
     }
   }
-  return null;
+  return bestResponse;
 }
 
 /** Ask YouTube's internal player API for caption tracks (works when the watch HTML has none). */
@@ -198,8 +224,13 @@ function audioFileDetails(mimeType: string | undefined) {
 async function readTranscriptionResponse(response: Response): Promise<string> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
-    const result = (await response.json()) as { text?: string };
-    return result.text?.trim() ?? "";
+    const body = await response.text();
+    try {
+      const result = JSON.parse(body) as { text?: string };
+      return result.text?.trim() ?? "";
+    } catch {
+      return "";
+    }
   }
 
   const body = await response.text();
@@ -243,13 +274,20 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
       model: "gpt-4o-mini-transcribe",
       openai: true,
     });
-  if (providers.length === 0) return "";
+  if (providers.length === 0) throw new Error("youtube_transcription_unavailable");
 
   const json = await callInnertube(videoId);
   const formats = (json?.streamingData?.adaptiveFormats ?? []).filter(
     (f) => f.mimeType?.startsWith("audio/") && f.url,
   );
-  if (formats.length === 0) return "";
+  if (formats.length === 0) {
+    console.error("[youtube] no direct audio stream", {
+      videoId,
+      status: json?.playabilityStatus?.status,
+      reason: json?.playabilityStatus?.reason,
+    });
+    throw new Error("youtube_audio_unavailable");
+  }
 
   // A truncated compressed container is frequently rejected as corrupt. Only
   // upload complete audio files that fit the transcription endpoint limit.
@@ -259,7 +297,10 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
       return Number.isFinite(size) && size > 0 && size <= WHISPER_MAX_BYTES;
     })
     .sort((a, b) => (a.bitrate ?? Infinity) - (b.bitrate ?? Infinity));
-  if (completeFormats.length === 0) return "";
+  if (completeFormats.length === 0) {
+    console.error("[youtube] audio exceeds transcription limit", { videoId });
+    throw new Error("youtube_audio_too_large");
+  }
 
   let lastError: Error | null = null;
 
@@ -285,7 +326,6 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
         );
         form.append("model", p.model);
         form.append("response_format", "json");
-        form.append("stream", "true");
 
         const response = await fetch(p.url, {
           method: "POST",
@@ -293,21 +333,29 @@ export async function transcribeYoutubeAudio(videoId: string, apiKey?: string): 
           body: form,
         });
         if (!response.ok) {
+          const providerError = (await response.text()).slice(0, 500);
+          console.error("[youtube] transcription provider rejected audio", {
+            provider: p.openai ? "openai" : "lovable",
+            status: response.status,
+            error: providerError,
+          });
           if (p.openai && response.status === 401) lastError = new Error("openai_invalid_key");
           else if (p.openai && (response.status === 429 || response.status === 402))
             lastError = new Error("openai_quota");
+          else lastError = new Error("youtube_transcription_failed");
           continue;
         }
 
         const text = (await readTranscriptionResponse(response)).replace(/\s{2,}/g, " ").trim();
         if (text) return text;
-      } catch {
-        /* try next provider */
+      } catch (error) {
+        console.error("[youtube] transcription request failed", error);
+        lastError = error instanceof Error ? error : new Error("youtube_transcription_failed");
       }
     }
   }
   if (lastError) throw lastError;
-  return "";
+  throw new Error("youtube_transcription_failed");
 }
 
 
