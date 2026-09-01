@@ -170,7 +170,7 @@ const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
  * YouTube's streaming data and transcribe it with OpenAI. Pure fetch, so it
  * runs in the edge runtime (no yt-dlp / child_process).
  */
-async function transcribeYoutubeAudio(videoId: string, apiKey: string): Promise<string> {
+export async function transcribeYoutubeAudio(videoId: string, apiKey: string): Promise<string> {
   const json = await callInnertube(videoId);
   const formats = (json?.streamingData?.adaptiveFormats ?? []).filter(
     (f) => f.mimeType?.startsWith("audio/") && f.url,
