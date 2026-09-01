@@ -125,6 +125,12 @@ function Home() {
         toast.error(t.errYoutubeUrl);
       } else if (msg === "youtube_no_captions") {
         toast.error(t.errYoutubeCaptions);
+      } else if (msg === "youtube_audio_unavailable") {
+        toast.error("تعذّر الوصول إلى صوت هذا الفيديو. تأكدي أن الفيديو عام وغير مقيّد بالعمر أو المنطقة.");
+      } else if (msg === "youtube_audio_too_large") {
+        toast.error("الفيديو طويل جدًا للتحويل الصوتي. جرّبي فيديو أقصر من نحو 45 دقيقة.");
+      } else if (msg === "youtube_transcription_unavailable" || msg === "youtube_transcription_failed") {
+        toast.error("تعذّر تحويل صوت الفيديو إلى نص الآن. حاولي مرة أخرى بعد قليل.");
       } else if (msg === "openai_quota") {
         toast.error(t.errOpenaiQuota);
       } else if (msg === "openai_invalid_key") {
