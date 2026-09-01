@@ -43,7 +43,8 @@ export const generateLessonPackage = createServerFn({ method: "POST" })
 
     if (data.mode === "youtube") {
       const { fetchYoutubeTranscript } = await import("./youtube.server");
-      const { title, text } = await fetchYoutubeTranscript(data.youtubeUrl ?? "", key);
+      const transcriptKey = process.env["OPENAI_API_KEY"] ?? key;
+      const { title, text } = await fetchYoutubeTranscript(data.youtubeUrl ?? "", transcriptKey);
       const { youtubeUrl: _ignored, ...rest } = data;
       return buildLessonPackage(
         { ...rest, mode: "text", text: `${title}\n\n${text}` },
