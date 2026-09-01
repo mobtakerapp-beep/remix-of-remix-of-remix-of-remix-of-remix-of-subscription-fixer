@@ -264,9 +264,24 @@ export async function fetchYoutubeTranscript(
     if (text.length >= 40) break;
   }
 
+  // Last-resort: YouTube's public timedtext endpoint (works for some videos
+  // whose caption tracks are missing from the player response).
+  if (text.length < 40) {
+    for (const lang of ["ar", "en"]) {
+      for (const extra of ["", "&kind=asr"]) {
+        text = await fetchTrackText(
+          `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}${extra}`,
+        );
+        if (text.length >= 40) break;
+      }
+      if (text.length >= 40) break;
+    }
+  }
+
   if (text.length < 40 && apiKey) {
     text = await transcribeYoutubeAudio(videoId, apiKey);
   }
+
 
   if (text.length < 40) throw new Error("youtube_no_captions");
 
